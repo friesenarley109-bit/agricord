@@ -17,29 +17,194 @@
             <a href="settings.html">Settings</a>
         </div>
     </nav>
+
     <div class="container">
-        <h2>Dashboard - Season: <span id="currentSeasonLabel" style="color:var(--primary)"></span></h2>
-        <div class="grid-3" style="margin-top: 20px;">
-            <div class="card"><h3>Total Fields</h3><p id="statFields" style="font-size: 2rem; color: var(--primary);">0</p></div>
-            <div class="card"><h3>Planted Acres</h3><p id="statAcres" style="font-size: 2rem; color: var(--primary);">0</p></div>
-            <div class="card"><h3>Applications</h3><p id="statApps" style="font-size: 2rem; color: var(--primary);">0</p></div>
+        <h2>Dashboard & Summary</h2>
+
+        <!-- Dashboard Filters -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 10px; color: var(--primary);">Filter View</h3>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Filter by Season</label>
+                    <select id="filterSeason" onchange="renderDashboard()">
+                        <option value="">All Seasons</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Filter by Crop</label>
+                    <select id="filterCrop" onchange="renderDashboard()">
+                        <option value="">All Crops</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Filter by Variety</label>
+                    <select id="filterVariety" onchange="renderDashboard()">
+                        <option value="">All Varieties</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-small" style="margin-top: 10px;" onclick="resetFilters()">Reset Filters</button>
+        </div>
+
+        <!-- High-Level Metrics Summary -->
+        <div class="grid-3" style="margin-bottom: 20px;">
+            <div class="card" style="border-left: 4px solid var(--primary);">
+                <h3 style="font-size: 0.9rem; color: var(--text-muted);">Total Filtered Acres</h3>
+                <p id="metricAcres" style="font-size: 1.8rem; font-weight: bold; margin-top: 5px;">0 ac</p>
+            </div>
+            <div class="card" style="border-left: 4px solid var(--warning);">
+                <h3 style="font-size: 0.9rem; color: var(--text-muted);">Planted Fields</h3>
+                <p id="metricFields" style="font-size: 1.8rem; font-weight: bold; margin-top: 5px;">0</p>
+            </div>
+            <div class="card" style="border-left: 4px solid var(--success);">
+                <h3 style="font-size: 0.9rem; color: var(--text-muted);">Total Dry Harvest Bags</h3>
+                <p id="metricHarvest" style="font-size: 1.8rem; font-weight: bold; margin-top: 5px;">0 bgs</p>
+            </div>
+        </div>
+
+        <!-- Filtered Operations Table -->
+        <div class="card">
+            <h3>Filtered Field Operations</h3>
+            <table style="margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th>Season</th>
+                        <th>Field</th>
+                        <th>Crop</th>
+                        <th>Planted Acres</th>
+                        <th>Status</th>
+                        <th>Yield / Notes</th>
+                    </tr>
+                </thead>
+                <tbody id="dashboardTableBody">
+                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No records match the selected filters.</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
+
     <script src="app.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const db = getDB();
-            const season = getActiveSeason();
-            document.getElementById('currentSeasonLabel').textContent = season.name;
-            document.getElementById('statFields').textContent = season.settings.fields.length;
-            
-            const seasonPlantings = db.plantings.filter(p => p.seasonId === season.id);
-            const totalAcres = seasonPlantings.reduce((sum, p) => sum + parseFloat(p.plantedAcres || 0), 0);
-            document.getElementById('statAcres').textContent = totalAcres.toFixed(1);
-            
-            const seasonApps = db.applications.filter(a => a.seasonId === season.id);
-            document.getElementById('statApps').textContent = seasonApps.length;
+            initDashboardFilters();
+            renderDashboard();
         });
+
+        function initDashboardFilters() {
+            const db = getDB();
+            
+            // Populate Seasons
+            const seasonSelect = document.getElementById('filterSeason');
+            db.seasons.forEach(s => {
+                seasonSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+            });
+            // Default to active season
+            seasonSelect.value = db.activeSeasonId;
+
+            // Collect unique crops and varieties across all seasons' settings
+            const cropMap = new Map();
+            const varietyMap = new Map();
+
+            db.seasons.forEach(s => {
+                if (s.settings) {
+                    if (s.settings.crops) {
+                        s.settings.crops.forEach(c => cropMap.set(c.id, c.name));
+                    }
+                    if (s.settings.seedVarieties) {
+                        s.settings.seedVarieties.forEach(v => varietyMap.set(v.id, v.name));
+                    }
+                }
+            });
+
+            const cropSelect = document.getElementById('filterCrop');
+            cropMap.forEach((name, id) => {
+                cropSelect.innerHTML += `<option value="${id}">${name}</option>`;
+            });
+
+            const varietySelect = document.getElementById('filterVariety');
+            varietyMap.forEach((name, id) => {
+                varietySelect.innerHTML += `<option value="${id}">${name}</option>`;
+            });
+        }
+
+        function resetFilters() {
+            const db = getDB();
+            document.getElementById('filterSeason').value = db.activeSeasonId;
+            document.getElementById('filterCrop').value = '';
+            document.getElementById('filterVariety').value = '';
+            renderDashboard();
+        }
+
+        function renderDashboard() {
+            const db = getDB();
+            const selSeason = document.getElementById('filterSeason').value;
+            const selCrop = document.getElementById('filterCrop').value;
+            const selVariety = document.getElementById('filterVariety').value;
+
+            const tbody = document.getElementById('dashboardTableBody');
+            tbody.innerHTML = '';
+
+            let totalAcres = 0;
+            let fieldCount = 0;
+            let totalHarvestBags = 0;
+            let matchedRowsCount = 0;
+
+            // Filter plantings based on selections
+            db.plantings.forEach(p => {
+                // Season filter
+                if (selSeason && p.seasonId !== selSeason) return;
+                // Crop filter
+                if (selCrop && p.cropId !== selCrop) return;
+                
+                // Variety filter (checks if any variety in the planting matches)
+                if (selVariety) {
+                    const hasVariety = p.varieties && p.varieties.some(v => v.varietyId === selVariety);
+                    if (!hasVariety) return;
+                }
+
+                // If it passes filters, fetch corresponding data
+                matchedRowsCount++;
+                totalAcres += (p.plantedAcres || 0);
+                fieldCount++;
+
+                const seasonObj = db.seasons.find(s => s.id === p.seasonId);
+                const seasonName = seasonObj ? seasonObj.name : 'Unknown';
+
+                // Find settings from that specific season
+                const seasonSettings = seasonObj ? seasonObj.settings : null;
+                const fieldObj = seasonSettings && seasonSettings.fields ? seasonSettings.fields.find(f => f.id === p.fieldId) : null;
+                const cropObj = seasonSettings && seasonSettings.crops ? seasonSettings.crops.find(c => c.id === p.cropId) : null;
+                const harvestObj = db.harvests.find(h => h.plantingId === p.id);
+
+                if (harvestObj) {
+                    totalHarvestBags += (parseFloat(harvestObj.dryBags) || 0);
+                }
+
+                let statusHtml = p.isHarvested ? '<span class="status-harvested">Harvested</span>' : '<span class="status-planted">Planted</span>';
+                let yieldInfo = harvestObj ? `Dry: ${harvestObj.dryBags} bgs (${harvestObj.bagsPerAcre} bpa)` : 'Active Growing';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${seasonName}</td>
+                        <td>${fieldObj ? fieldObj.name : 'Unknown Field'}</td>
+                        <td>${cropObj ? cropObj.name : 'Unknown Crop'}</td>
+                        <td>${p.plantedAcres} ac</td>
+                        <td>${statusHtml}</td>
+                        <td>${yieldInfo}</td>
+                    </tr>
+                `;
+            });
+
+            if (matchedRowsCount === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No records match the selected filters.</td></tr>`;
+            }
+
+            // Update Metric Cards
+            document.getElementById('metricAcres').textContent = `${totalAcres.toFixed(1)} ac`;
+            document.getElementById('metricFields').textContent = fieldCount;
+            document.getElementById('metricHarvest').textContent = `${totalHarvestBags.toFixed(1)} bgs`;
+        }
     </script>
 </body>
 </html>
