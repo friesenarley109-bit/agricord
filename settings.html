@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agricord - Settings</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <div class="logo">Agricord</div>
+        <div class="links">
+            <a href="index.html">Dashboard</a>
+            <a href="planting.html">Planting</a>
+            <a href="application.html">Application</a>
+            <a href="view_data.html">View Data</a>
+            <a href="settings.html">Settings</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Season Management -->
+        <div class="card" style="border-color: var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <h2>Season Management</h2>
+                <button class="btn btn-danger btn-small" onclick="resetCurrentSeasonOnly()">Reset Current Season Data</button>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px; align-items: center; flex-wrap: wrap;">
+                <label style="margin:0;">Active Season:</label>
+                <select id="seasonSelect" style="width: auto;"></select>
+                <button class="btn btn-small" onclick="renameSeason()">Rename</button>
+                <button class="btn btn-danger btn-small" onclick="deleteSeason()">Delete</button>
+                <button class="btn btn-primary" onclick="createNewSeason()">+ New Season</button>
+            </div>
+        </div>
+
+        <!-- Data Backup & Restore -->
+        <div class="card">
+            <h2>Data Backup & Restore</h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">
+                Download a complete copy of all seasons, settings, and field records to keep safe or transfer to another device.
+            </p>
+            <div style="display: flex; gap: 10px; margin-top: 15px; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="exportBackup()">Download Backup (.json)</button>
+                <input type="file" id="restoreFile" accept=".json" style="display: none;" onchange="importBackup(event)">
+                <button class="btn btn-warning" onclick="document.getElementById('restoreFile').click()">Restore from Backup</button>
+            </div>
+        </div>
+
+        <!-- Prescription Management -->
+        <h3 style="margin-top: 20px; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 5px;">Saved Prescriptions</h3>
+        <div class="grid-2" style="margin-top: 15px;">
+            <div class="card">
+                <h3>Planting Prescriptions</h3>
+                <ul class="settings-list" id="plantRxList"></ul>
+            </div>
+            <div class="card">
+                <h3>Application Prescriptions</h3>
+                <ul class="settings-list" id="appRxList"></ul>
+            </div>
+        </div>
+
+        <!-- Locations -->
+        <h3 style="margin-top:20px; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 5px;">Locations</h3>
+        <div class="grid-3" style="margin-top: 15px;">
+            <div class="card">
+                <h3>Growers</h3><ul class="settings-list" id="growerList"></ul>
+                <div class="form-group"><input type="text" id="newGrower" placeholder="Name"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addBasic('growers', 'newGrower')">Add</button></div>
+            </div>
+            <div class="card">
+                <h3>Farms</h3><ul class="settings-list" id="farmList"></ul>
+                <div class="form-group"><select id="farmGrowerSelect"></select><input type="text" id="newFarm" placeholder="Name" style="margin-top:5px;"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addRelational('farms', 'growerId', 'farmGrowerSelect', 'newFarm')">Add</button></div>
+            </div>
+            <div class="card">
+                <h3>Fields</h3><ul class="settings-list" id="fieldList"></ul>
+                <div class="form-group"><select id="fieldFarmSelect"></select><input type="text" id="newField" placeholder="Name" style="margin-top:5px;"><input type="number" id="newFieldSize" placeholder="Acres" style="margin-top:5px;"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addRelational('fields', 'farmId', 'fieldFarmSelect', 'newField', 'newFieldSize')">Add</button></div>
+            </div>
+        </div>
+
+        <!-- Planting Setup -->
+        <h3 style="margin-top: 20px; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 5px;">Planting & Fertility Setup</h3>
+        <div class="grid-3" style="margin-top: 15px;">
+            <div class="card">
+                <h3>Crops</h3><ul class="settings-list" id="cropList"></ul>
+                <div class="form-group"><input type="text" id="newCrop" placeholder="Crop"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addBasic('crops', 'newCrop')">Add</button></div>
+            </div>
+            <div class="card">
+                <h3>Brands</h3><ul class="settings-list" id="brandList"></ul>
+                <div class="form-group"><select id="brandCropSelect"></select><input type="text" id="newBrand" placeholder="Brand" style="margin-top:5px;"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addRelational('seedBrands', 'cropId', 'brandCropSelect', 'newBrand')">Add</button></div>
+            </div>
+            <div class="card">
+                <h3>Varieties</h3><ul class="settings-list" id="varietyList"></ul>
+                <div class="form-group"><select id="varietyBrandSelect"></select><input type="text" id="newVariety" placeholder="Variety" style="margin-top:5px;"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addRelational('seedVarieties', 'brandId', 'varietyBrandSelect', 'newVariety')">Add</button></div>
+            </div>
+        </div>
+
+        <!-- Fertilizer Inventory (Uses Master Units Dropdown) -->
+        <div class="card" style="margin-top:15px;">
+            <h3>Liquid Fertilizers</h3>
+            <ul class="settings-list" id="fertList"></ul>
+            <div class="grid-3" style="margin-top:10px;">
+                <div class="form-group"><label>Product Name</label><input type="text" id="newFertName" placeholder="e.g. 28-0-0"></div>
+                <div class="form-group">
+                    <label>Default Unit</label>
+                    <select id="fertUnitSelect"></select>
+                </div>
+                <div class="form-group" style="display:flex; align-items:flex-end;">
+                    <button class="btn btn-primary" style="width:100%;" onclick="addFertilizer()">Add Fertilizer</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Application Setup -->
+        <h3 style="margin-top: 20px; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 5px;">Application Setup</h3>
+        <div class="grid-3" style="margin-top: 15px;">
+            <div class="card">
+                <h3>Units</h3><ul class="settings-list" id="unitList"></ul>
+                <div class="form-group"><input type="text" id="newUnit" placeholder="e.g. gal/ac, qt/ac, oz/ac"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addBasic('units', 'newUnit')">Add</button></div>
+            </div>
+            <div class="card">
+                <h3>Job Types</h3><ul class="settings-list" id="jobTypeList"></ul>
+                <div class="form-group"><input type="text" id="newJobType" placeholder="e.g. Spraying"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addBasic('jobTypes', 'newJobType')">Add</button></div>
+            </div>
+            <div class="card">
+                <h3>Categories</h3><ul class="settings-list" id="catList"></ul>
+                <div class="form-group"><select id="catJobSelect"></select><input type="text" id="newCat" placeholder="e.g. Herbicide" style="margin-top:5px;"><button class="btn btn-primary" style="width:100%; margin-top:5px;" onclick="addRelational('chemicalCategories', 'jobTypeId', 'catJobSelect', 'newCat')">Add</button></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:15px;">
+            <h3>Chemicals / Products</h3><ul class="settings-list" id="chemicalList"></ul>
+            <div class="grid-3" style="margin-top:10px;">
+                <div class="form-group"><label>Category</label><select id="chemCatSelect"></select></div>
+                <div class="form-group"><label>Product Name</label><input type="text" id="newChemName"></div>
+                <div class="form-group"><label>Default Rate</label><input type="number" id="newChemAmt" step="0.01"></div>
+                <div class="form-group"><label>Default Unit</label><select id="chemUnitSelect"></select></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%;" onclick="addChemical()">Add Chemical Product</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        function render() {
+            const db = getDB();
+            const season = getActiveSeason();
+            if (!season || !season.settings) return;
+            const set = season.settings;
+            if(!set.fertilizers) set.fertilizers = [];
+
+            const sSelect = document.getElementById('seasonSelect');
+            sSelect.innerHTML = '';
+            db.seasons.forEach(s => {
+                sSelect.innerHTML += `<option value="${s.id}" ${s.id === db.activeSeasonId ? 'selected' : ''}>${s.name}</option>`;
+            });
+
+            const drawRxList = (type, elementId) => {
+                const el = document.getElementById(elementId);
+                el.innerHTML = '';
+                const rxs = db.prescriptions.filter(p => p.seasonId === db.activeSeasonId && p.type === type);
+                rxs.forEach(rx => {
+                    el.innerHTML += `<li><span>${rx.name}</span>
+                        <div class="action-btns">
+                            <button class="edit-btn" onclick="renamePrescription('${rx.id}')">✎</button>
+                            <button class="delete-btn" onclick="deletePrescription('${rx.id}')">×</button>
+                        </div></li>`;
+                });
+            };
+            drawRxList('plant', 'plantRxList');
+            drawRxList('app', 'appRxList');
+
+            const drawList = (key, listId, parentKey, parentRef, formatExtra) => {
+                const el = document.getElementById(listId);
+                if (!el) return; el.innerHTML = '';
+                if (!set[key]) return;
+                set[key].forEach(item => {
+                    let prefix = '';
+                    if(parentKey && set[parentKey]) {
+                        const p = set[parentKey].find(x => x.id === item[parentRef]);
+                        if(p) prefix = `<strong style="color:var(--primary); opacity:0.7;">${p.name} &rsaquo; </strong> `;
+                    }
+                    const extra = formatExtra ? formatExtra(item) : '';
+                    el.innerHTML += `<li><span>${prefix}${item.name} ${extra}</span> 
+                        <div class="action-btns">
+                            <button class="edit-btn" onclick="editItem('${key}', '${item.id}')">✎</button>
+                            <button class="delete-btn" onclick="deleteItem('${key}', '${item.id}')">×</button>
+                        </div></li>`;
+                });
+            };
+
+            drawList('growers', 'growerList'); 
+            drawList('crops', 'cropList');
+            drawList('units', 'unitList'); 
+            drawList('jobTypes', 'jobTypeList');
+            drawList('farms', 'farmList', 'growers', 'growerId');
+            drawList('fields', 'fieldList', 'farms', 'farmId', i => `<small style="color:var(--text-muted)">(${i.size} ac)</small>`);
+            drawList('seedBrands', 'brandList', 'crops', 'cropId');
+            drawList('seedVarieties', 'varietyList', 'seedBrands', 'brandId');
+            drawList('chemicalCategories', 'catList', 'jobTypes', 'jobTypeId');
+            
+            drawList('fertilizers', 'fertList', null, null, i => {
+                const u = set.units.find(x => x.id === i.defaultUnitId);
+                const label = u ? u.name : (i.unit || 'units');
+                return `<small style="color:var(--text-muted)">(${label})</small>`;
+            });
+            
+            drawList('chemicals', 'chemicalList', 'chemicalCategories', 'categoryId', i => {
+                const u = set.units.find(x => x.id === i.defaultUnitId);
+                return `<small style="color:var(--text-muted)">(${i.defaultAmount} ${u ? u.name : 'units'})</small>`;
+            });
+
+            populateSelect('farmGrowerSelect', set.growers); 
+            populateSelect('fieldFarmSelect', set.farms);
+            populateSelect('brandCropSelect', set.crops); 
+            populateSelect('varietyBrandSelect', set.seedBrands);
+            populateSelect('catJobSelect', set.jobTypes); 
+            populateSelect('chemCatSelect', set.chemicalCategories);
+            populateSelect('chemUnitSelect', set.units, "Unit...");
+            populateSelect('fertUnitSelect', set.units, "Default Unit...");
+        }
+
+        function exportBackup() {
+            const db = getDB();
+            const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `agricord_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (!importedData || !Array.isArray(importedData.seasons)) throw new Error("Invalid structure");
+                    if (confirm("Restore backup? This will overwrite current database data.")) {
+                        saveDB(importedData); alert("Restored successfully!"); location.reload();
+                    }
+                } catch (err) { alert("Invalid backup file."); }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        document.getElementById('seasonSelect').addEventListener('change', (e) => {
+            const db = getDB(); db.activeSeasonId = e.target.value; saveDB(db); location.reload();
+        });
+
+        function createNewSeason() {
+            const name = prompt("Enter name for new season (e.g. 2027):");
+            if(name) copySettingsToNewSeason(name);
+        }
+
+        function renameSeason() {
+            const db = getDB(); const season = db.seasons.find(s => s.id === db.activeSeasonId);
+            const n = prompt("Rename Season:", season.name);
+            if(n && n.trim() !== "") { season.name = n.trim(); saveDB(db); render(); }
+        }
+
+        function deleteSeason() {
+            const db = getDB(); if(db.seasons.length <= 1) return alert("Must have at least one season.");
+            if(confirm("Delete season and all operational records?")) {
+                db.plantings = db.plantings.filter(p => p.seasonId !== db.activeSeasonId);
+                db.applications = db.applications.filter(a => a.seasonId !== db.activeSeasonId);
+                db.harvests = db.harvests.filter(h => h.seasonId !== db.activeSeasonId);
+                db.seasons = db.seasons.filter(s => s.id !== db.activeSeasonId);
+                db.activeSeasonId = db.seasons[0].id;
+                saveDB(db); location.reload();
+            }
+        }
+
+        function resetCurrentSeasonOnly() {
+            if(confirm("Reset all operation logs for current season?")) {
+                const db = getDB();
+                db.plantings = db.plantings.filter(p => p.seasonId !== db.activeSeasonId);
+                db.applications = db.applications.filter(a => a.seasonId !== db.activeSeasonId);
+                db.harvests = db.harvests.filter(h => h.seasonId !== db.activeSeasonId);
+                saveDB(db); location.reload();
+            }
+        }
+
+        function addBasic(key, inpId) {
+            const val = document.getElementById(inpId).value.trim(); if(!val) return;
+            const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            if(!db.seasons[sIdx].settings[key]) db.seasons[sIdx].settings[key] = [];
+            db.seasons[sIdx].settings[key].push({id: generateId(), name: val});
+            saveDB(db); document.getElementById(inpId).value = ''; render();
+        }
+
+        function addRelational(key, refField, selId, inpId, sizeId=null) {
+            const pId = document.getElementById(selId).value; const name = document.getElementById(inpId).value.trim();
+            if(!pId || !name) return alert("Select parent and enter name.");
+            const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            const item = {id: generateId(), name: name}; item[refField] = pId;
+            if(sizeId) { const sz = document.getElementById(sizeId).value; if(!sz) return alert("Enter size."); item.size = parseFloat(sz); }
+            db.seasons[sIdx].settings[key].push(item);
+            saveDB(db); document.getElementById(inpId).value = ''; if(sizeId) document.getElementById(sizeId).value = ''; render();
+        }
+
+        function addFertilizer() {
+            const name = document.getElementById('newFertName').value.trim();
+            const uId = document.getElementById('fertUnitSelect').value;
+            if(!name || !uId) return alert("Enter product name and select default unit.");
+            const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            if(!db.seasons[sIdx].settings.fertilizers) db.seasons[sIdx].settings.fertilizers = [];
+            db.seasons[sIdx].settings.fertilizers.push({ id: generateId(), name: name, defaultUnitId: uId });
+            saveDB(db); document.getElementById('newFertName').value = ''; render();
+        }
+
+        function addChemical() {
+            const catId = document.getElementById('chemCatSelect').value; const name = document.getElementById('newChemName').value.trim();
+            const amt = document.getElementById('newChemAmt').value; const uId = document.getElementById('chemUnitSelect').value;
+            if(!catId || !name || !amt || !uId) return alert("Fill all details.");
+            const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            db.seasons[sIdx].settings.chemicals.push({ id: generateId(), categoryId: catId, name: name, defaultAmount: parseFloat(amt), defaultUnitId: uId });
+            saveDB(db); document.getElementById('newChemName').value = ''; document.getElementById('newChemAmt').value = ''; render();
+        }
+
+        function editItem(key, id) {
+            const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            const set = db.seasons[sIdx].settings;
+            const item = set[key].find(i => i.id === id);
+
+            if(key === 'fields') {
+                const n = prompt("Edit Field Name:", item.name); const s = prompt("Edit Total Acres:", item.size);
+                if(n) item.name = n.trim(); if(s) item.size = parseFloat(s);
+            } else if(key === 'chemicals') {
+                const n = prompt("Edit Product Name:", item.name);
+                const a = prompt("Edit Default Rate:", item.defaultAmount);
+                const unitListStr = set.units.map((u, idx) => `${idx + 1}. ${u.name}`).join('\n');
+                const uChoice = prompt("Select Default Unit Number:\n" + unitListStr);
+                if(n) item.name = n.trim();
+                if(a) item.defaultAmount = parseFloat(a);
+                if(uChoice && set.units[parseInt(uChoice) - 1]) {
+                    item.defaultUnitId = set.units[parseInt(uChoice) - 1].id;
+                }
+            } else if(key === 'fertilizers') {
+                const n = prompt("Edit Fertilizer Name:", item.name);
+                const unitListStr = set.units.map((u, idx) => `${idx + 1}. ${u.name}`).join('\n');
+                const uChoice = prompt("Select Default Unit Number:\n" + unitListStr);
+                if(n) item.name = n.trim();
+                if(uChoice && set.units[parseInt(uChoice) - 1]) {
+                    item.defaultUnitId = set.units[parseInt(uChoice) - 1].id;
+                }
+            } else {
+                const n = prompt("Edit Name:", item.name);
+                if(n) item.name = n.trim();
+            }
+            saveDB(db); render();
+        }
+
+        function deleteItem(key, id) {
+            if(!confirm("Delete this item?")) return;
+            const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            db.seasons[sIdx].settings[key] = db.seasons[sIdx].settings[key].filter(i => i.id !== id);
+            saveDB(db); render();
+        }
+
+        document.addEventListener('DOMContentLoaded', render);
+    </script>
+</body>
+</html>

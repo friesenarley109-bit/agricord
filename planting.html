@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agricord - Add Planting</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <div class="logo">Agricord</div>
+        <div class="links"><a href="index.html">Dashboard</a><a href="planting.html">Planting</a><a href="application.html">Application</a><a href="view_data.html">View Data</a><a href="settings.html">Settings</a></div>
+    </nav>
+    <div class="container">
+        <h2>Record Planting</h2>
+        <div class="card">
+            <form id="plantingForm">
+                <div class="grid-3">
+                    <div class="form-group"><label>Grower</label><select id="grower" required></select></div>
+                    <div class="form-group"><label>Farm</label><select id="farm" required disabled></select></div>
+                    <div class="form-group"><label>Field</label><select id="field" required disabled></select></div>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group"><label>Field Size</label><input type="number" id="fieldSize" readonly></div>
+                    <div class="form-group"><label>Total Planted Acres</label><input type="number" id="plantedAcres" step="0.1" required></div>
+                    <div class="form-group"><label>Plant Date</label><input type="date" id="plantDate" required></div>
+                </div>
+                
+                <h3 style="margin: 20px 0 10px 0; color: var(--primary);">Seed Selection & Population</h3>
+                <div class="form-group"><label>Crop Type</label><select id="crop" required></select></div>
+                <div id="varietyContainer"></div>
+                <button type="button" class="btn btn-small" style="margin-bottom: 20px;" onclick="addVarietyRow()">+ Add Variety</button>
+
+                <!-- Tank Mix 1: Infurrow -->
+                <h3 style="margin: 20px 0 10px 0; color: var(--primary);">Tank Mix 1: Infurrow</h3>
+                <div class="form-group"><label>Target Gallons / Acre (Infurrow)</label><input type="number" id="targetInfurrowGal" step="0.01" value="0"></div>
+                <div id="infurrowContainer"></div>
+                <button type="button" class="btn btn-small" style="margin-bottom: 20px;" onclick="addFertRow('infurrowContainer')">+ Add Infurrow Product</button>
+
+                <!-- Tank Mix 2: 2x2/UAN -->
+                <h3 style="margin: 20px 0 10px 0; color: var(--primary);">Tank Mix 2: 2x2/UAN</h3>
+                <div class="form-group"><label>Target Gallons / Acre (2x2/UAN)</label><input type="number" id="targetUanGal" step="0.01" value="0"></div>
+                <div id="uanContainer"></div>
+                <button type="button" class="btn btn-small" style="margin-bottom: 20px;" onclick="addFertRow('uanContainer')">+ Add 2x2/UAN Product</button>
+
+                <div class="form-group" style="margin-top:15px;"><label>Notes</label><textarea id="notes" rows="3"></textarea></div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary">Save Planting</button>
+                    <button type="button" class="btn" id="btnSaveRx">Save as Prescription</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <button class="btn btn-warning bottom-right-btn" id="btnOpenRx">Fill From Prescription</button>
+
+    <div class="modal" id="rxModal"><div class="modal-content"><h3>Select Prescription</h3><div id="rxModalList" style="margin-top:15px;"></div><button class="btn" id="btnCloseRx" style="margin-top:10px; width:100%;">Cancel</button></div></div>
+
+    <script src="app.js"></script>
+    <script>
+        // Global helpers so inline onclick attributes resolve immediately
+        window.addVarietyRow = function(data = null) {
+            const set = getSettings();
+            const container = document.getElementById('varietyContainer');
+            const cropId = document.getElementById('crop').value;
+            if(!cropId) return alert("Select Crop first.");
+
+            const div = document.createElement('div');
+            div.className = 'card variety-entry';
+            div.style = "margin-bottom:10px; border: 1px dashed var(--border);";
+            div.innerHTML = `
+                <div class="grid-3">
+                    <div class="form-group"><label>Brand</label><select class="v-brand" required></select></div>
+                    <div class="form-group"><label>Variety</label><select class="v-variety" required disabled></select></div>
+                    <div class="form-group"><label>Variety Acres</label><input type="number" class="v-acres" step="0.1" required></div>
+                </div>
+                <div class="form-group" style="margin-top:10px;"><label>Seeding Rate (seeds/acre for this variety)</label><input type="number" class="v-rate" required></div>
+                <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(div);
+
+            const bSel = div.querySelector('.v-brand'); const vSel = div.querySelector('.v-variety');
+            populateSelect(bSel, set.seedBrands.filter(b => b.cropId === cropId));
+            
+            bSel.addEventListener('change', () => {
+                populateSelect(vSel, set.seedVarieties.filter(v => v.brandId === bSel.value)); vSel.disabled = !bSel.value;
+            });
+
+            if(data) {
+                bSel.value = data.brandId; bSel.dispatchEvent(new Event('change'));
+                vSel.value = data.varietyId; 
+                div.querySelector('.v-acres').value = data.acres;
+                div.querySelector('.v-rate').value = data.seedingRate;
+            }
+        };
+
+        window.addFertRow = function(containerId, data = null) {
+            const set = getSettings();
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = 'card fert-entry';
+            div.style = "margin-bottom:10px; border: 1px dashed var(--border);";
+            div.innerHTML = `
+                <div class="grid-3">
+                    <div class="form-group"><label>Fertilizer Product</label><select class="f-product" required></select></div>
+                    <div class="form-group"><label>Product Rate / Acre</label><input type="number" class="f-rate" step="0.01" required></div>
+                    <div class="form-group"><label>Unit</label><select class="f-unit" required></select></div>
+                </div>
+                <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove Product</button>
+            `;
+            container.appendChild(div);
+
+            const pSel = div.querySelector('.f-product');
+            const uSel = div.querySelector('.f-unit');
+            populateSelect(pSel, set.fertilizers, "Select Fertilizer...");
+            populateSelect(uSel, set.units, "Unit...");
+
+            pSel.addEventListener('change', () => {
+                const prod = set.fertilizers.find(f => f.id === pSel.value);
+                if (!prod) return;
+                if (prod.defaultUnitId && set.units.some(u => u.id === prod.defaultUnitId)) {
+                    uSel.value = prod.defaultUnitId;
+                } else if (prod.unit) {
+                    const matchedUnit = set.units.find(u => 
+                        u.name.toLowerCase().trim() === prod.unit.toLowerCase().trim() ||
+                        u.name.toLowerCase().startsWith(prod.unit.toLowerCase().trim())
+                    );
+                    if (matchedUnit) uSel.value = matchedUnit.id;
+                }
+            });
+
+            if (data) {
+                pSel.value = data.productId;
+                div.querySelector('.f-rate').value = data.rate;
+                if (data.unitId) {
+                    uSel.value = data.unitId;
+                } else {
+                    pSel.dispatchEvent(new Event('change'));
+                }
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const db = getDB(); const set = getSettings();
+            if(!set.fertilizers) set.fertilizers = [];
+            populateSelect('grower', set.growers); populateSelect('crop', set.crops);
+
+            const trg = (id) => document.getElementById(id).dispatchEvent(new Event('change'));
+
+            document.getElementById('grower').addEventListener('change', e => {
+                populateSelect('farm', set.farms.filter(f => f.growerId === e.target.value));
+                document.getElementById('farm').disabled = !e.target.value;
+            });
+            document.getElementById('farm').addEventListener('change', e => {
+                populateSelect('field', set.fields.filter(f => f.farmId === e.target.value));
+                document.getElementById('field').disabled = !e.target.value;
+            });
+            document.getElementById('field').addEventListener('change', e => {
+                const f = set.fields.find(x => x.id === e.target.value);
+                document.getElementById('fieldSize').value = f ? f.size : '';
+                document.getElementById('plantedAcres').value = f ? f.size : '';
+            });
+
+            const params = new URLSearchParams(window.location.search);
+            const pfField = params.get('fieldId');
+            if(pfField) {
+                const f = set.fields.find(x => x.id === pfField);
+                if(f) {
+                    const frm = set.farms.find(x => x.id === f.farmId);
+                    if(frm) {
+                        document.getElementById('grower').value = frm.growerId; trg('grower');
+                        setTimeout(() => { document.getElementById('farm').value = frm.id; trg('farm');
+                            setTimeout(() => { document.getElementById('field').value = f.id; trg('field'); }, 50);
+                        }, 50);
+                    }
+                }
+            }
+
+            document.getElementById('crop').addEventListener('change', () => {
+                document.getElementById('varietyContainer').innerHTML = '';
+                addVarietyRow();
+            });
+
+            const parseFertContainer = (containerId) => {
+                const ferts = []; let totalGal = 0;
+                document.querySelectorAll(`#${containerId} .fert-entry`).forEach(el => {
+                    const rate = parseFloat(el.querySelector('.f-rate').value || 0);
+                    const unitId = el.querySelector('.f-unit').value;
+                    const unitObj = set.units.find(u => u.id === unitId);
+                    const unitName = unitObj ? unitObj.name : '';
+                    ferts.push({ productId: el.querySelector('.f-product').value, rate: rate, unitId: unitId, unit: unitName });
+                    totalGal += convertToGallons(rate, unitName);
+                });
+                return {ferts, totalGal};
+            };
+
+            const getForm = () => {
+                const varieties = []; let totalVAcres = 0;
+                document.querySelectorAll('.variety-entry').forEach(el => {
+                    const ac = parseFloat(el.querySelector('.v-acres').value || 0);
+                    varieties.push({ 
+                        brandId: el.querySelector('.v-brand').value, 
+                        varietyId: el.querySelector('.v-variety').value, 
+                        acres: ac,
+                        seedingRate: el.querySelector('.v-rate').value 
+                    });
+                    totalVAcres += ac;
+                });
+
+                const infurrow = parseFertContainer('infurrowContainer');
+                const uan = parseFertContainer('uanContainer');
+
+                return { 
+                    id: generateId(), seasonId: db.activeSeasonId, growerId: document.getElementById('grower').value,
+                    farmId: document.getElementById('farm').value, fieldId: document.getElementById('field').value,
+                    plantedAcres: parseFloat(document.getElementById('plantedAcres').value), 
+                    date: document.getElementById('plantDate').value, cropId: document.getElementById('crop').value,
+                    varieties: varieties, totalVarietyAcres: totalVAcres,
+                    targetInfurrowGal: parseFloat(document.getElementById('targetInfurrowGal').value || 0),
+                    infurrowFertilizers: infurrow.ferts, calculatedInfurrowGal: infurrow.totalGal,
+                    targetUanGal: parseFloat(document.getElementById('targetUanGal').value || 0),
+                    uanFertilizers: uan.ferts, calculatedUanGal: uan.totalGal,
+                    notes: document.getElementById('notes').value, isHarvested: false 
+                };
+            };
+
+            document.getElementById('plantingForm').addEventListener('submit', e => {
+                e.preventDefault(); const fd = getForm();
+                if(Math.abs(fd.plantedAcres - fd.totalVarietyAcres) > 0.01) {
+                    return alert(`Variety total acres (${fd.totalVarietyAcres}) must match planted acres (${fd.plantedAcres})`);
+                }
+                if(fd.targetInfurrowGal > 0 && Math.abs(fd.targetInfurrowGal - fd.calculatedInfurrowGal) > 0.01) {
+                    return alert(`Infurrow mix sum (${fd.calculatedInfurrowGal} gal) does not match Target Infurrow Rate (${fd.targetInfurrowGal} gal)`);
+                }
+                if(fd.targetUanGal > 0 && Math.abs(fd.targetUanGal - fd.calculatedUanGal) > 0.01) {
+                    return alert(`2x2/UAN mix sum (${fd.calculatedUanGal} gal) does not match Target 2x2/UAN Rate (${fd.targetUanGal} gal)`);
+                }
+                db.plantings.push(fd); saveDB(db); window.location.href = 'view_data.html';
+            });
+
+            document.getElementById('btnSaveRx').addEventListener('click', () => {
+                const name = prompt("Prescription Name:");
+                if(name) { db.prescriptions.push({ id: generateId(), seasonId: db.activeSeasonId, type: 'plant', name, data: getForm() }); saveDB(db); alert("Saved!"); }
+            });
+
+            setupRxModal('plant', (data) => {
+                document.getElementById('grower').value = data.growerId; trg('grower');
+                setTimeout(() => {
+                    document.getElementById('farm').value = data.farmId; trg('farm');
+                    setTimeout(() => {
+                        document.getElementById('field').value = data.fieldId; trg('field');
+                        document.getElementById('crop').value = data.cropId; 
+                        document.getElementById('targetInfurrowGal').value = data.targetInfurrowGal || 0;
+                        document.getElementById('targetUanGal').value = data.targetUanGal || 0;
+                        document.getElementById('varietyContainer').innerHTML = '';
+                        document.getElementById('infurrowContainer').innerHTML = '';
+                        document.getElementById('uanContainer').innerHTML = '';
+                        if(data.varieties) data.varieties.forEach(v => addVarietyRow(v));
+                        if(data.infurrowFertilizers) data.infurrowFertilizers.forEach(f => addFertRow('infurrowContainer', f));
+                        if(data.uanFertilizers) data.uanFertilizers.forEach(f => addFertRow('uanContainer', f));
+                        document.getElementById('notes').value = data.notes || '';
+                    }, 50);
+                }, 50);
+            });
+        });
+    </script>
+</body>
+</html>

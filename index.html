@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agricord - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <div class="logo">Agricord</div>
+        <div class="links">
+            <a href="index.html">Dashboard</a>
+            <a href="planting.html">Planting</a>
+            <a href="application.html">Application</a>
+            <a href="view_data.html">View Data</a>
+            <a href="settings.html">Settings</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h2>Dashboard - Season: <span id="currentSeasonLabel" style="color:var(--primary)"></span></h2>
+        <div class="grid-3" style="margin-top: 20px;">
+            <div class="card"><h3>Total Fields</h3><p id="statFields" style="font-size: 2rem; color: var(--primary);">0</p></div>
+            <div class="card"><h3>Planted Acres</h3><p id="statAcres" style="font-size: 2rem; color: var(--primary);">0</p></div>
+            <div class="card"><h3>Applications</h3><p id="statApps" style="font-size: 2rem; color: var(--primary);">0</p></div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const db = getDB();
+            const season = getActiveSeason();
+            document.getElementById('currentSeasonLabel').textContent = season.name;
+            document.getElementById('statFields').textContent = season.settings.fields.length;
+            
+            const seasonPlantings = db.plantings.filter(p => p.seasonId === season.id);
+            const totalAcres = seasonPlantings.reduce((sum, p) => sum + parseFloat(p.plantedAcres || 0), 0);
+            document.getElementById('statAcres').textContent = totalAcres.toFixed(1);
+            
+            const seasonApps = db.applications.filter(a => a.seasonId === season.id);
+            document.getElementById('statApps').textContent = seasonApps.length;
+        });
+    </script>
+</body>
+</html>

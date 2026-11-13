@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agricord - View Data</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .summary-block { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 10px; }
+        .summary-block div { background: var(--card-bg); border-left: 4px solid var(--primary); padding: 10px 12px; border-radius: 4px; border: 1px solid var(--border); border-left-width: 4px; }
+        .edit-subcard { background: var(--bg-color); border: 1px dashed var(--border); padding: 10px; border-radius: 4px; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">Agricord</div>
+        <div class="links"><a href="index.html">Dashboard</a><a href="planting.html">Planting</a><a href="application.html">Application</a><a href="view_data.html">View Data</a><a href="settings.html">Settings</a></div>
+    </nav>
+    <div class="container">
+        <h2>Field Operations Master Log</h2>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr><th>Grower</th><th>Farm</th><th>Field</th><th>Status</th><th>Size (Ac)</th><th>Planted</th><th>Summary Metrics</th></tr>
+                </thead>
+                <tbody id="dataTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Master Unified Full-Detail Edit Modal Window -->
+    <div class="modal" id="editModal">
+        <div class="modal-content" style="max-width:750px; max-height:90vh; overflow-y:auto;">
+            <h3 id="editModalTitle">Edit Operation Record</h3>
+            <form id="editForm" style="margin-top:15px;">
+                <input type="hidden" id="edit_arrType"><input type="hidden" id="edit_recId">
+                
+                <div class="grid-2">
+                    <div class="form-group"><label>Operation Date</label><input type="date" id="edit_date" required></div>
+                    <div class="form-group" id="acresInputBox"><label>Operational Area (Acres)</label><input type="number" id="edit_acres" step="0.1" required></div>
+                </div>
+
+                <!-- Dynamic Full Planting Edit Section -->
+                <div id="plantingEditFields" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
+                    <div class="form-group"><label>Crop Type</label><select id="edit_crop"></select></div>
+                    
+                    <h4 style="color:var(--primary); margin:10px 0;">Seed Varieties & Populations</h4>
+                    <div id="edit_varietiesContainer"></div>
+                    <button type="button" class="btn btn-small" onclick="addEditVarietyRow()">+ Add Variety</button>
+
+                    <h4 style="color:var(--primary); margin:15px 0 5px 0;">Tank Mix 1: Infurrow</h4>
+                    <div class="form-group"><label>Target Gallons / Acre</label><input type="number" id="edit_targetInfurrow" step="0.01"></div>
+                    <div id="edit_infurrowContainer"></div>
+                    <button type="button" class="btn btn-small" onclick="addEditFertRow('edit_infurrowContainer')">+ Add Infurrow Product</button>
+
+                    <h4 style="color:var(--primary); margin:15px 0 5px 0;">Tank Mix 2: 2x2/UAN</h4>
+                    <div class="form-group"><label>Target Gallons / Acre</label><input type="number" id="edit_targetUan" step="0.01"></div>
+                    <div id="edit_uanContainer"></div>
+                    <button type="button" class="btn btn-small" onclick="addEditFertRow('edit_uanContainer')">+ Add 2x2/UAN Product</button>
+                </div>
+
+                <!-- Dynamic Full Application Edit Section -->
+                <div id="applicationEditFields" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
+                    <div class="form-group"><label>Job Type</label><select id="edit_jobType"></select></div>
+                    <h4 style="color:var(--primary); margin:10px 0;">Chemicals & Application Rates</h4>
+                    <div id="edit_chemsContainer"></div>
+                    <button type="button" class="btn btn-small" onclick="addEditChemRow()">+ Add Chemical Product</button>
+                </div>
+                
+                <!-- Dynamic Full Harvest Edit Section -->
+                <div id="harvestEditFields" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
+                    <div class="grid-3">
+                        <div class="form-group"><label>Wet Bags Harvested</label><input type="number" id="edit_wetBags" step="0.1"></div>
+                        <div class="form-group"><label>Dry Bags Harvested</label><input type="number" id="edit_dryBags" step="0.1"></div>
+                        <div class="form-group"><label>Moisture (%)</label><input type="number" id="edit_moisture" step="0.1"></div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top:15px;"><label>Notes / Comments</label><textarea id="edit_notes" rows="3"></textarea></div>
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button type="submit" class="btn btn-primary">Save All Changes</button>
+                    <button type="button" class="btn" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Harvest Flow Modal -->
+    <div class="modal" id="harvestModal">
+        <div class="modal-content">
+            <h3>Harvest Field</h3>
+            <form id="harvestForm">
+                <input type="hidden" id="h_plantingId"><input type="hidden" id="h_fieldId">
+                <div class="form-group"><label>Date</label><input type="date" id="h_date" required></div>
+                <div class="form-group"><label>Wet Bags</label><input type="number" id="h_wetBags" step="0.1" value="0"></div>
+                <div class="form-group"><label>Dry Bags</label><input type="number" id="h_dryBags" step="0.1" value="0"></div>
+                <div class="form-group"><label>Moisture Percentage (%)</label><input type="number" id="h_moisture" step="0.1" value="0"></div>
+                <div class="form-group"><label>Notes</label><textarea id="h_notes"></textarea></div>
+                <div style="display:flex; gap:10px; margin-top:10px;"><button type="submit" class="btn btn-primary">Save Harvest</button><button type="button" class="btn" onclick="document.getElementById('harvestModal').style.display='none'">Cancel</button></div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        let set = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const db = getDB(); set = getSettings();
+            if(!set.fertilizers) set.fertilizers = [];
+            const tbody = document.getElementById('dataTable');
+
+            const fData = set.fields.map(field => {
+                const farm = set.farms.find(f => f.id === field.farmId);
+                const grower = farm ? set.growers.find(g => g.id === farm.growerId) : null;
+                const planting = db.plantings.find(p => p.fieldId === field.id && p.seasonId === db.activeSeasonId);
+                const harvest = db.harvests.find(h => h.fieldId === field.id && h.seasonId === db.activeSeasonId);
+                const apps = db.applications.filter(a => a.fieldId === field.id && a.seasonId === db.activeSeasonId);
+                let status = 0; if(harvest) status = 2; else if (planting) status = 1;
+                return { field, farm, grower, planting, harvest, apps, status };
+            });
+
+            fData.sort((a, b) => b.status - a.status).forEach(d => {
+                const tr = document.createElement('tr'); tr.className = 'expandable';
+                let statusHtml, metrics = '-';
+                if(d.status === 2) { 
+                    statusHtml = '<span class="status-harvested">Harvested</span>'; 
+                    metrics = `Dry: ${d.harvest.dryBags} bgs (${d.harvest.bagsPerAcre} bpa)`; 
+                } else if(d.status === 1) { 
+                    statusHtml = '<span class="status-planted">Planted</span>'; 
+                    metrics = `Age: ${calcAge(d.planting.date)}`; 
+                } else { 
+                    statusHtml = '<span class="status-unplanted">Unplanted</span>'; 
+                }
+
+                tr.innerHTML = `<td>${d.grower?d.grower.name:''}</td><td>${d.farm?d.farm.name:''}</td><td>${d.field.name}</td><td>${statusHtml}</td><td>${d.field.size}</td><td>${d.planting?d.planting.plantedAcres:'-'}</td><td style="font-weight:bold;">${metrics}</td>`;
+
+                const trDetails = document.createElement('tr'); trDetails.className = 'details-row';
+                let det = `<div class="details-content"><div class="summary-block">`;
+                
+                if(d.status === 0) {
+                    det += `<div><strong>Field Setup:</strong> No operation logs found for this season.</div></div><button class="btn btn-primary btn-small" onclick="window.location.href='planting.html?fieldId=${d.field.id}'">Plant Field</button>`;
+                } else {
+                    const c = set.crops.find(x=>x.id===d.planting.cropId);
+                    det += `<div><strong>Planting Details</strong> <button class="edit-btn" onclick="openPopupEditor('plantings','${d.planting.id}')">✎ Edit</button><br>
+                            Date: ${d.planting.date}<br>Crop: ${c?c.name:''}<br>
+                            Notes: <span style="color:var(--text-muted);">${d.planting.notes || 'None'}</span><br><br><strong>Seed Varieties & Populations:</strong><br>`;
+                    d.planting.varieties?.forEach(v => {
+                        const br = set.seedBrands.find(x=>x.id===v.brandId); const vr = set.seedVarieties.find(x=>x.id===v.varietyId);
+                        det += ` &bull; ${br?br.name:''} ${vr?vr.name:''} (${v.acres} ac, @ ${v.seedingRate} seeds/ac)<br>`;
+                    });
+                    det += `</div>`;
+
+                    det += `<div><strong>Fertilizer Tank Mixes</strong><br>
+                            <strong>Infurrow</strong> (Target: ${d.planting.targetInfurrowGal || 0} gal/ac):<br>`;
+                    if(d.planting.infurrowFertilizers && d.planting.infurrowFertilizers.length > 0) {
+                        d.planting.infurrowFertilizers.forEach(f => {
+                            const fp = set.fertilizers.find(x=>x.id===f.productId);
+                            const uObj = set.units.find(x=>x.id===f.unitId);
+                            const uLabel = uObj ? uObj.name : (f.unit || '');
+                            det += ` &nbsp;&bull; ${fp?fp.name:''}: ${f.rate} ${uLabel}/ac<br>`;
+                        });
+                    } else { det += ` &nbsp;&bull; None recorded<br>`; }
+
+                    det += `<br><strong>2x2/UAN</strong> (Target: ${d.planting.targetUanGal || 0} gal/ac):<br>`;
+                    if(d.planting.uanFertilizers && d.planting.uanFertilizers.length > 0) {
+                        d.planting.uanFertilizers.forEach(f => {
+                            const fp = set.fertilizers.find(x=>x.id===f.productId);
+                            const uObj = set.units.find(x=>x.id===f.unitId);
+                            const uLabel = uObj ? uObj.name : (f.unit || '');
+                            det += ` &nbsp;&bull; ${fp?fp.name:''}: ${f.rate} ${uLabel}/ac<br>`;
+                        });
+                    } else { det += ` &nbsp;&bull; None recorded<br>`; }
+                    det += `</div>`;
+
+                    det += `<div><strong>Treatment Applications Log</strong><br>`;
+                    if(d.apps.length > 0) {
+                        d.apps.forEach(a => {
+                            const jt = set.jobTypes.find(x=>x.id===a.jobTypeId);
+                            det += `<div style="border-bottom:1px solid var(--border); padding:4px 0; border-left:none; border-top:none; border-right:none; border-radius:0;">
+                                    <strong>${a.date} - ${jt?jt.name:''} (${a.treatedAcres} ac)</strong> 
+                                    <button class="edit-btn" onclick="openPopupEditor('applications','${a.id}')">✎</button> 
+                                    <button class="delete-btn" onclick="delRecord('applications','${a.id}')">×</button><br>`;
+                            a.chemicals?.forEach(ch => {
+                                const chem = set.chemicals.find(x=>x.id===ch.chemicalId);
+                                const u = set.units.find(x=>x.id===ch.unitId);
+                                det += ` <small>&rsaquo; ${chem?chem.name:''}: ${ch.rate} ${u?u.name:''}</small><br>`;
+                            });
+                            if(a.notes) det += `<small style="color:var(--text-muted); display:block;">Notes: ${a.notes}</small>`;
+                            det += `</div>`;
+                        });
+                    } else { det += 'No treatment applications made.'; }
+                    det += `</div>`;
+
+                    if(d.status === 2) {
+                        det += `<div><strong>Harvest Metrics</strong> <button class="edit-btn" onclick="openPopupEditor('harvests','${d.harvest.id}')">✎ Edit</button><br>
+                                Date: ${d.harvest.date}<br>
+                                Wet Bags: ${d.harvest.wetBags || 0}<br>
+                                Dry Bags: ${d.harvest.dryBags || 0}<br>
+                                Moisture: ${d.harvest.moisture || 0}%<br>
+                                Yield Efficiency: <strong>${d.harvest.bagsPerAcre} bpa</strong><br>
+                                Notes: <span style="color:var(--text-muted);">${d.harvest.notes || 'None'}</span></div>`;
+                    }
+                    det += `</div>`;
+
+                    if(d.status === 1) {
+                        det += `<div style="margin-top:10px;"><button class="btn btn-danger btn-small" onclick="delRecord('plantings','${d.planting.id}')">Delete Planting</button> <button class="btn btn-warning btn-small" onclick="openHarvest('${d.planting.id}','${d.field.id}')">Harvest Field</button></div>`;
+                    } else {
+                        det += `<div style="margin-top:10px;"><button class="btn btn-danger btn-small" onclick="delRecord('harvests','${d.harvest.id}')">Delete Harvest Record</button></div>`;
+                    }
+                }
+                trDetails.innerHTML = `<td colspan="7">${det}</div></td>`;
+                tr.onclick = () => trDetails.classList.toggle('active');
+                tbody.appendChild(tr); tbody.appendChild(trDetails);
+            });
+        });
+
+        function addEditVarietyRow(data = null) {
+            const container = document.getElementById('edit_varietiesContainer');
+            const cropId = document.getElementById('edit_crop').value;
+            const div = document.createElement('div');
+            div.className = 'edit-subcard edit-v-row';
+            div.innerHTML = `
+                <div class="grid-3">
+                    <div class="form-group"><label>Brand</label><select class="ev-brand" required></select></div>
+                    <div class="form-group"><label>Variety</label><select class="ev-variety" required></select></div>
+                    <div class="form-group"><label>Acres</label><input type="number" class="ev-acres" step="0.1" required></div>
+                </div>
+                <div class="form-group"><label>Population (seeds/ac)</label><input type="number" class="ev-rate" required></div>
+                <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(div);
+            const bSel = div.querySelector('.ev-brand'); const vSel = div.querySelector('.ev-variety');
+            populateSelect(bSel, set.seedBrands.filter(b => b.cropId === cropId));
+            bSel.addEventListener('change', () => populateSelect(vSel, set.seedVarieties.filter(v => v.brandId === bSel.value)));
+            if(data) {
+                bSel.value = data.brandId; bSel.dispatchEvent(new Event('change'));
+                vSel.value = data.varietyId;
+                div.querySelector('.ev-acres').value = data.acres;
+                div.querySelector('.ev-rate').value = data.seedingRate;
+            }
+        }
+
+        function addEditFertRow(containerId, data = null) {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = 'edit-subcard edit-f-row';
+            div.innerHTML = `
+                <div class="grid-3">
+                    <div class="form-group"><label>Fertilizer</label><select class="ef-prod" required></select></div>
+                    <div class="form-group"><label>Rate / Ac</label><input type="number" class="ef-rate" step="0.01" required></div>
+                    <div class="form-group"><label>Unit</label><select class="ef-unit" required></select></div>
+                </div>
+                <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(div);
+            const pSel = div.querySelector('.ef-prod'); const uSel = div.querySelector('.ef-unit');
+            populateSelect(pSel, set.fertilizers); populateSelect(uSel, set.units);
+
+            pSel.addEventListener('change', () => {
+                const prod = set.fertilizers.find(f => f.id === pSel.value);
+                if (!prod) return;
+                if (prod.defaultUnitId && set.units.some(u => u.id === prod.defaultUnitId)) {
+                    uSel.value = prod.defaultUnitId;
+                } else if (prod.unit) {
+                    const matchedUnit = set.units.find(u => 
+                        u.name.toLowerCase().trim() === prod.unit.toLowerCase().trim() ||
+                        u.name.toLowerCase().startsWith(prod.unit.toLowerCase().trim())
+                    );
+                    if (matchedUnit) uSel.value = matchedUnit.id;
+                }
+            });
+
+            if(data) {
+                pSel.value = data.productId;
+                div.querySelector('.ef-rate').value = data.rate;
+                if(data.unitId) {
+                    uSel.value = data.unitId;
+                } else {
+                    pSel.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+
+        function addEditChemRow(data = null) {
+            const container = document.getElementById('edit_chemsContainer');
+            const div = document.createElement('div');
+            div.className = 'edit-subcard edit-c-row';
+            div.innerHTML = `
+                <div class="grid-3">
+                    <div class="form-group"><label>Chemical</label><select class="ec-chem" required></select></div>
+                    <div class="form-group"><label>Rate / Ac</label><input type="number" class="ec-rate" step="0.01" required></div>
+                    <div class="form-group"><label>Unit</label><select class="ec-unit" required></select></div>
+                </div>
+                <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(div);
+            const cSel = div.querySelector('.ec-chem'); const uSel = div.querySelector('.ec-unit');
+            populateSelect(cSel, set.chemicals); populateSelect(uSel, set.units);
+            cSel.addEventListener('change', () => {
+                const ch = set.chemicals.find(c => c.id === cSel.value);
+                if(ch) { div.querySelector('.ec-rate').value = ch.defaultAmount; uSel.value = ch.defaultUnitId; }
+            });
+            if(data) {
+                cSel.value = data.chemicalId;
+                div.querySelector('.ec-rate').value = data.rate;
+                uSel.value = data.unitId;
+            }
+        }
+
+        function openPopupEditor(arr, id) {
+            const db = getDB(); const item = db[arr].find(x => x.id === id);
+            document.getElementById('edit_arrType').value = arr;
+            document.getElementById('edit_recId').value = id;
+            document.getElementById('edit_date').value = item.date;
+            document.getElementById('edit_notes').value = item.notes || '';
+            
+            document.getElementById('plantingEditFields').style.display = (arr === 'plantings') ? 'block' : 'none';
+            document.getElementById('applicationEditFields').style.display = (arr === 'applications') ? 'block' : 'none';
+            document.getElementById('harvestEditFields').style.display = (arr === 'harvests') ? 'block' : 'none';
+            document.getElementById('acresInputBox').style.display = (arr === 'harvests') ? 'none' : 'block';
+            
+            if(arr === 'plantings') {
+                document.getElementById('editModalTitle').textContent = "Edit Complete Planting Record";
+                document.getElementById('edit_acres').value = item.plantedAcres;
+                populateSelect('edit_crop', set.crops);
+                document.getElementById('edit_crop').value = item.cropId;
+                document.getElementById('edit_targetInfurrow').value = item.targetInfurrowGal || 0;
+                document.getElementById('edit_targetUan').value = item.targetUanGal || 0;
+
+                document.getElementById('edit_varietiesContainer').innerHTML = '';
+                item.varieties?.forEach(v => addEditVarietyRow(v));
+
+                document.getElementById('edit_infurrowContainer').innerHTML = '';
+                item.infurrowFertilizers?.forEach(f => addEditFertRow('edit_infurrowContainer', f));
+
+                document.getElementById('edit_uanContainer').innerHTML = '';
+                item.uanFertilizers?.forEach(f => addEditFertRow('edit_uanContainer', f));
+
+            } else if(arr === 'applications') {
+                document.getElementById('editModalTitle').textContent = "Edit Complete Application Record";
+                document.getElementById('edit_acres').value = item.treatedAcres;
+                populateSelect('edit_jobType', set.jobTypes);
+                document.getElementById('edit_jobType').value = item.jobTypeId;
+
+                document.getElementById('edit_chemsContainer').innerHTML = '';
+                item.chemicals?.forEach(c => addEditChemRow(c));
+
+            } else if(arr === 'harvests') {
+                document.getElementById('editModalTitle').textContent = "Edit Harvest Summary";
+                document.getElementById('edit_wetBags').value = item.wetBags || 0;
+                document.getElementById('edit_dryBags').value = item.dryBags || 0;
+                document.getElementById('edit_moisture').value = item.moisture || 0;
+            }
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        document.getElementById('editForm').onsubmit = e => {
+            e.preventDefault(); const db = getDB();
+            const arr = document.getElementById('edit_arrType').value;
+            const id = document.getElementById('edit_recId').value;
+            const item = db[arr].find(x => x.id === id);
+
+            item.date = document.getElementById('edit_date').value;
+            item.notes = document.getElementById('edit_notes').value;
+
+            if(arr === 'plantings') {
+                const newAcres = parseFloat(document.getElementById('edit_acres').value);
+                const varieties = []; let totalVAcres = 0;
+                document.querySelectorAll('.edit-v-row').forEach(row => {
+                    const ac = parseFloat(row.querySelector('.ev-acres').value || 0);
+                    varieties.push({
+                        brandId: row.querySelector('.ev-brand').value,
+                        varietyId: row.querySelector('.ev-variety').value,
+                        acres: ac,
+                        seedingRate: row.querySelector('.ev-rate').value
+                    });
+                    totalVAcres += ac;
+                });
+
+                if(Math.abs(newAcres - totalVAcres) > 0.01) {
+                    return alert(`Variety total acres (${totalVAcres}) must match planted acres (${newAcres})`);
+                }
+
+                const parseEditFerts = (cId) => {
+                    const list = []; let gal = 0;
+                    document.querySelectorAll(`#${cId} .edit-f-row`).forEach(row => {
+                        const rate = parseFloat(row.querySelector('.ef-rate').value || 0);
+                        const uId = row.querySelector('.ef-unit').value;
+                        const uObj = set.units.find(u => u.id === uId);
+                        const uName = uObj ? uObj.name : '';
+                        list.push({ productId: row.querySelector('.ef-prod').value, rate: rate, unitId: uId, unit: uName });
+                        gal += convertToGallons(rate, uName);
+                    });
+                    return {list, gal};
+                };
+
+                const inf = parseEditFerts('edit_infurrowContainer');
+                const uan = parseEditFerts('edit_uanContainer');
+                const tInf = parseFloat(document.getElementById('edit_targetInfurrow').value || 0);
+                const tUan = parseFloat(document.getElementById('edit_targetUan').value || 0);
+
+                if(tInf > 0 && Math.abs(tInf - inf.gal) > 0.01) {
+                    return alert(`Infurrow blend sum (${inf.gal} gal) does not match target (${tInf} gal).`);
+                }
+                if(tUan > 0 && Math.abs(tUan - uan.gal) > 0.01) {
+                    return alert(`2x2/UAN blend sum (${uan.gal} gal) does not match target (${tUan} gal).`);
+                }
+
+                item.plantedAcres = newAcres;
+                item.cropId = document.getElementById('edit_crop').value;
+                item.varieties = varieties;
+                item.totalVarietyAcres = totalVAcres;
+                item.targetInfurrowGal = tInf;
+                item.infurrowFertilizers = inf.list;
+                item.calculatedInfurrowGal = inf.gal;
+                item.targetUanGal = tUan;
+                item.uanFertilizers = uan.list;
+                item.calculatedUanGal = uan.gal;
+
+            } else if(arr === 'applications') {
+                item.treatedAcres = parseFloat(document.getElementById('edit_acres').value);
+                item.jobTypeId = document.getElementById('edit_jobType').value;
+                const chems = [];
+                document.querySelectorAll('.edit-c-row').forEach(row => {
+                    const chemId = row.querySelector('.ec-chem').value;
+                    const chemObj = set.chemicals.find(c => c.id === chemId);
+                    chems.push({
+                        categoryId: chemObj ? chemObj.categoryId : '',
+                        chemicalId: chemId,
+                        rate: parseFloat(row.querySelector('.ec-rate').value || 0),
+                        unitId: row.querySelector('.ec-unit').value
+                    });
+                });
+                item.chemicals = chems;
+
+            } else if(arr === 'harvests') {
+                item.wetBags = parseFloat(document.getElementById('edit_wetBags').value || 0);
+                item.dryBags = parseFloat(document.getElementById('edit_dryBags').value || 0);
+                item.moisture = parseFloat(document.getElementById('edit_moisture').value || 0);
+                const p = db.plantings.find(x => x.id === item.plantingId);
+                if(p) item.bagsPerAcre = (item.dryBags / p.plantedAcres).toFixed(2);
+            }
+            saveDB(db); location.reload();
+        };
+
+        function openHarvest(pId, fId) {
+            document.getElementById('h_plantingId').value = pId; document.getElementById('h_fieldId').value = fId;
+            document.getElementById('harvestModal').style.display = 'flex';
+        }
+
+        document.getElementById('harvestForm').onsubmit = e => {
+            e.preventDefault(); const db = getDB(); const pId = document.getElementById('h_plantingId').value;
+            const p = db.plantings.find(x => x.id === pId); 
+            const wet = parseFloat(document.getElementById('h_wetBags').value || 0);
+            const dry = parseFloat(document.getElementById('h_dryBags').value || 0);
+            const moisture = parseFloat(document.getElementById('h_moisture').value || 0);
+
+            db.harvests.push({ 
+                id: generateId(), seasonId: db.activeSeasonId, fieldId: document.getElementById('h_fieldId').value, plantingId: pId, 
+                date: document.getElementById('h_date').value, wetBags: wet, dryBags: dry, moisture: moisture, 
+                bagsPerAcre: (dry / p.plantedAcres).toFixed(2), notes: document.getElementById('h_notes').value 
+            });
+            p.isHarvested = true; saveDB(db); location.reload();
+        };
+
+        function delRecord(arr, id) {
+            if(!confirm("Delete this operation log entry permanently?")) return;
+            const db = getDB();
+            if(arr === 'harvests') {
+                const h = db.harvests.find(x=>x.id===id); const p = db.plantings.find(x=>x.id===h.plantingId);
+                if(p) p.isHarvested = false;
+            }
+            db[arr] = db[arr].filter(x => x.id !== id);
+            saveDB(db); location.reload();
+        }
+    </script>
+</body>
+</html>

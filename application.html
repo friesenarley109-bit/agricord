@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agricord - Add Application</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .category-sections-stack { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
+        .category-section-box { background: var(--bg-color); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+        .category-section-box h4 { color: var(--primary); margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">Agricord</div>
+        <div class="links"><a href="index.html">Dashboard</a><a href="planting.html">Planting</a><a href="application.html">Application</a><a href="view_data.html">View Data</a><a href="settings.html">Settings</a></div>
+    </nav>
+    <div class="container">
+        <h2>Record Treatment Application</h2>
+        <div class="card">
+            <form id="appForm">
+                <div class="grid-3">
+                    <div class="form-group"><label>Grower</label><select id="grower" required></select></div>
+                    <div class="form-group"><label>Farm</label><select id="farm" required disabled></select></div>
+                    <div class="form-group"><label>Field</label><select id="field" required disabled></select></div>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group"><label>Application Date</label><input type="date" id="appDate" required></div>
+                    <div class="form-group"><label>Job Type</label><select id="jobType" required></select></div>
+                    <div class="form-group"><label>Total Area Treated (Acres)</label><input type="number" id="treatedAcres" step="0.1" required></div>
+                </div>
+
+                <!-- Reorganized Vertical Category & Chemical Selector -->
+                <div class="form-group" style="margin-top: 15px;">
+                    <label style="font-weight: bold; color: var(--primary);">Select Categories & Add Chemicals</label>
+                    <div id="categorySectionsContainer" class="category-sections-stack">
+                        <p style="color:var(--text-muted); font-style:italic;">Please select a Job Type first to load available categories.</p>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top:20px;"><label>Notes / Environmental Conditions</label><textarea id="notes" rows="3"></textarea></div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary">Save Application</button>
+                    <button type="button" class="btn" id="btnSaveRx">Save as Tank Mix Rx</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <button class="btn btn-warning bottom-right-btn" id="btnOpenRx">Load Tank Mix Rx</button>
+
+    <div class="modal" id="rxModal"><div class="modal-content"><h3>Select Tank Mix Prescription</h3><div id="rxModalList" style="margin-top:15px;"></div><button class="btn" id="btnCloseRx" style="margin-top:10px; width:100%;">Cancel</button></div></div>
+
+    <script src="app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const db = getDB(); const set = getSettings();
+            populateSelect('grower', set.growers); populateSelect('jobType', set.jobTypes);
+
+            const trg = (id) => document.getElementById(id).dispatchEvent(new Event('change'));
+
+            document.getElementById('jobType').addEventListener('change', (e) => {
+                const selectedJobTypeId = e.target.value;
+                const container = document.getElementById('categorySectionsContainer');
+                container.innerHTML = '';
+
+                const validCats = set.chemicalCategories.filter(c => c.jobTypeId === selectedJobTypeId);
+                if(validCats.length === 0) {
+                    container.innerHTML = '<p style="color:var(--text-muted); font-style:italic;">No categories found for this Job Type.</p>';
+                    return;
+                }
+
+                validCats.forEach(cat => {
+                    const box = document.createElement('div');
+                    box.className = 'category-section-box';
+                    box.dataset.categoryId = cat.id;
+                    box.innerHTML = `
+                        <h4>${cat.name}</h4>
+                        <div class="chem-rows-container"></div>
+                        <button type="button" class="btn btn-small btn-primary" style="margin-top:5px;" onclick="addCategoryChemicalRow('${cat.id}')">+ Add ${cat.name}</button>
+                    `;
+                    container.appendChild(box);
+                });
+            });
+
+            window.addCategoryChemicalRow = function(categoryId, data = null) {
+                const box = document.querySelector(`.category-section-box[data-category-id="${categoryId}"]`);
+                if(!box) return;
+                const rowsContainer = box.querySelector('.chem-rows-container');
+
+                const div = document.createElement('div');
+                div.className = 'card product-entry';
+                div.style = "margin-bottom:8px; border: 1px dashed var(--border); padding:10px;";
+                div.innerHTML = `
+                    <div class="grid-3">
+                        <div class="form-group"><label>Product</label><select class="p-chem" required></select></div>
+                        <div class="form-group"><label>Rate / Acre</label><input type="number" class="p-rate" step="0.01" required></div>
+                        <div class="form-group"><label>Unit</label><select class="p-unit" required></select></div>
+                    </div>
+                    <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove</button>
+                `;
+                rowsContainer.appendChild(div);
+
+                const pSel = div.querySelector('.p-chem'); const uSel = div.querySelector('.p-unit');
+                const catChems = set.chemicals.filter(c => c.categoryId === categoryId);
+                populateSelect(pSel, catChems, "Select Product...");
+                populateSelect(uSel, set.units, "Unit...");
+
+                pSel.addEventListener('change', () => {
+                    const chem = set.chemicals.find(c => c.id === pSel.value);
+                    if(chem) { div.querySelector('.p-rate').value = chem.defaultAmount; uSel.value = chem.defaultUnitId; }
+                });
+
+                if(data) {
+                    pSel.value = data.chemicalId; div.querySelector('.p-rate').value = data.rate; uSel.value = data.unitId;
+                }
+            };
+
+            document.getElementById('grower').addEventListener('change', e => {
+                populateSelect('farm', set.farms.filter(f => f.growerId === e.target.value)); document.getElementById('farm').disabled = !e.target.value;
+            });
+            document.getElementById('farm').addEventListener('change', e => {
+                populateSelect('field', set.fields.filter(f => f.farmId === e.target.value)); document.getElementById('field').disabled = !e.target.value;
+            });
+            document.getElementById('field').addEventListener('change', e => {
+                const f = set.fields.find(x => x.id === e.target.value);
+                document.getElementById('treatedAcres').value = f ? f.size : '';
+            });
+
+            const getForm = () => {
+                const chems = []; const categoryIds = [];
+                document.querySelectorAll('.category-section-box').forEach(box => {
+                    const catId = box.dataset.categoryId;
+                    const entries = box.querySelectorAll('.product-entry');
+                    if(entries.length > 0) categoryIds.push(catId);
+                    entries.forEach(el => {
+                        chems.push({ 
+                            categoryId: catId, 
+                            chemicalId: el.querySelector('.p-chem').value, 
+                            rate: parseFloat(el.querySelector('.p-rate').value), 
+                            unitId: el.querySelector('.p-unit').value 
+                        });
+                    });
+                });
+
+                return {
+                    id: generateId(), seasonId: db.activeSeasonId, growerId: document.getElementById('grower').value,
+                    farmId: document.getElementById('farm').value, fieldId: document.getElementById('field').value,
+                    date: document.getElementById('appDate').value, jobTypeId: document.getElementById('jobType').value,
+                    categoryIds: categoryIds, treatedAcres: parseFloat(document.getElementById('treatedAcres').value),
+                    chemicals: chems, notes: document.getElementById('notes').value
+                };
+            };
+
+            document.getElementById('appForm').addEventListener('submit', e => {
+                e.preventDefault(); db.applications.push(getForm()); saveDB(db); window.location.href = 'view_data.html';
+            });
+
+            document.getElementById('btnSaveRx').addEventListener('click', () => {
+                const name = prompt("Prescription Tank Name:");
+                if(name) { db.prescriptions.push({ id: generateId(), seasonId: db.activeSeasonId, type: 'app', name, data: getForm() }); saveDB(db); alert("Saved!"); }
+            });
+
+            setupRxModal('app', (data) => {
+                document.getElementById('grower').value = data.growerId; trg('grower');
+                setTimeout(() => {
+                    document.getElementById('farm').value = data.farmId; trg('farm');
+                    setTimeout(() => {
+                        document.getElementById('field').value = data.fieldId; trg('field');
+                        document.getElementById('jobType').value = data.jobTypeId; trg('jobType');
+                        setTimeout(() => {
+                            document.querySelectorAll('.category-section-box').forEach(box => {
+                                box.querySelector('.chem-rows-container').innerHTML = '';
+                            });
+                            if(data.chemicals) {
+                                data.chemicals.forEach(c => addCategoryChemicalRow(c.categoryId, c));
+                            }
+                        }, 50);
+                        document.getElementById('notes').value = data.notes || '';
+                    }, 50);
+                }, 50);
+            });
+        });
+    </script>
+</body>
+</html>
