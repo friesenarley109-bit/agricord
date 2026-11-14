@@ -141,6 +141,12 @@
 
     <script src="app.js"></script>
     <script>
+        // Helper for case-insensitive duplicate checking
+        function isDuplicate(list, name, extraCheck = () => true) {
+            const normalized = name.trim().toLowerCase();
+            return list && list.some(item => item.name.trim().toLowerCase() === normalized && extraCheck(item));
+        }
+
         function render() {
             const db = getDB();
             const season = getActiveSeason();
@@ -253,13 +259,22 @@
 
         function createNewSeason() {
             const name = prompt("Enter name for new season (e.g. 2027):");
-            if(name) copySettingsToNewSeason(name);
+            if(name) {
+                const trimmed = name.trim();
+                const db = getDB();
+                if (isDuplicate(db.seasons, trimmed)) return alert(`Season "${trimmed}" already exists.`);
+                copySettingsToNewSeason(trimmed);
+            }
         }
 
         function renameSeason() {
             const db = getDB(); const season = db.seasons.find(s => s.id === db.activeSeasonId);
             const n = prompt("Rename Season:", season.name);
-            if(n && n.trim() !== "") { season.name = n.trim(); saveDB(db); render(); }
+            if(n && n.trim() !== "") {
+                const trimmed = n.trim();
+                if (isDuplicate(db.seasons, trimmed, s => s.id !== db.activeSeasonId)) return alert(`Season "${trimmed}" already exists.`);
+                season.name = trimmed; saveDB(db); render();
+            }
         }
 
         function deleteSeason() {
@@ -288,6 +303,7 @@
             const val = document.getElementById(inpId).value.trim(); if(!val) return;
             const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
             if(!db.seasons[sIdx].settings[key]) db.seasons[sIdx].settings[key] = [];
+            if(isDuplicate(db.seasons[sIdx].settings[key], val)) return alert(`"${val}" already exists.`);
             db.seasons[sIdx].settings[key].push({id: generateId(), name: val});
             saveDB(db); document.getElementById(inpId).value = ''; render();
         }
@@ -296,6 +312,13 @@
             const pId = document.getElementById(selId).value; const name = document.getElementById(inpId).value.trim();
             if(!pId || !name) return alert("Select parent and enter name.");
             const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            if(!db.seasons[sIdx].settings[key]) db.seasons[sIdx].settings[key] = [];
+            
+            // Context-aware duplicate check (e.g. same field name under same farm)
+            if(isDuplicate(db.seasons[sIdx].settings[key], name, item => item[refField] === pId)) {
+                return alert(`"${name}" already exists under this parent.`);
+            }
+
             const item = {id: generateId(), name: name}; item[refField] = pId;
             if(sizeId) { const sz = document.getElementById(sizeId).value; if(!sz) return alert("Enter size."); item.size = parseFloat(sz); }
             db.seasons[sIdx].settings[key].push(item);
@@ -308,6 +331,7 @@
             if(!name || !uId) return alert("Enter product name and select default unit.");
             const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
             if(!db.seasons[sIdx].settings.fertilizers) db.seasons[sIdx].settings.fertilizers = [];
+            if(isDuplicate(db.seasons[sIdx].settings.fertilizers, name)) return alert(`Fertilizer "${name}" already exists.`);
             db.seasons[sIdx].settings.fertilizers.push({ id: generateId(), name: name, defaultUnitId: uId });
             saveDB(db); document.getElementById('newFertName').value = ''; render();
         }
@@ -317,6 +341,10 @@
             const amt = document.getElementById('newChemAmt').value; const uId = document.getElementById('chemUnitSelect').value;
             if(!catId || !name || !amt || !uId) return alert("Fill all details.");
             const db = getDB(); const sIdx = db.seasons.findIndex(s => s.id === db.activeSeasonId);
+            if(!db.seasons[sIdx].settings.chemicals) db.seasons[sIdx].settings.chemicals = [];
+            if(isDuplicate(db.seasons[sIdx].settings.chemicals, name, c => c.categoryId === catId)) {
+                return alert(`Chemical "${name}" already exists in this category.`);
+            }
             db.seasons[sIdx].settings.chemicals.push({ id: generateId(), categoryId: catId, name: name, defaultAmount: parseFloat(amt), defaultUnitId: uId });
             saveDB(db); document.getElementById('newChemName').value = ''; document.getElementById('newChemAmt').value = ''; render();
         }
@@ -328,13 +356,22 @@
 
             if(key === 'fields') {
                 const n = prompt("Edit Field Name:", item.name); const s = prompt("Edit Total Acres:", item.size);
-                if(n) item.name = n.trim(); if(s) item.size = parseFloat(s);
+                if(n && n.trim() !== "") {
+                    const trimmed = n.trim();
+                    if(isDuplicate(set[key], trimmed, i => i.id !== id && i.farmId === item.farmId)) return alert(`Field "${trimmed}" already exists on this farm.`);
+                    item.name = trimmed;
+                }
+                if(s) item.size = parseFloat(s);
             } else if(key === 'chemicals') {
                 const n = prompt("Edit Product Name:", item.name);
                 const a = prompt("Edit Default Rate:", item.defaultAmount);
                 const unitListStr = set.units.map((u, idx) => `${idx + 1}. ${u.name}`).join('\n');
                 const uChoice = prompt("Select Default Unit Number:\n" + unitListStr);
-                if(n) item.name = n.trim();
+                if(n && n.trim() !== "") {
+                    const trimmed = n.trim();
+                    if(isDuplicate(set[key], trimmed, i => i.id !== id && i.categoryId === item.categoryId)) return alert(`Chemical "${trimmed}" already exists in this category.`);
+                    item.name = trimmed;
+                }
                 if(a) item.defaultAmount = parseFloat(a);
                 if(uChoice && set.units[parseInt(uChoice) - 1]) {
                     item.defaultUnitId = set.units[parseInt(uChoice) - 1].id;
@@ -343,13 +380,26 @@
                 const n = prompt("Edit Fertilizer Name:", item.name);
                 const unitListStr = set.units.map((u, idx) => `${idx + 1}. ${u.name}`).join('\n');
                 const uChoice = prompt("Select Default Unit Number:\n" + unitListStr);
-                if(n) item.name = n.trim();
+                if(n && n.trim() !== "") {
+                    const trimmed = n.trim();
+                    if(isDuplicate(set[key], trimmed, i => i.id !== id)) return alert(`Fertilizer "${trimmed}" already exists.`);
+                    item.name = trimmed;
+                }
                 if(uChoice && set.units[parseInt(uChoice) - 1]) {
                     item.defaultUnitId = set.units[parseInt(uChoice) - 1].id;
                 }
             } else {
                 const n = prompt("Edit Name:", item.name);
-                if(n) item.name = n.trim();
+                if(n && n.trim() !== "") {
+                    const trimmed = n.trim();
+                    // Check parent reference if relational
+                    const parentKey = key === 'farms' ? 'growers' : (key === 'seedBrands' ? 'crops' : (key === 'seedVarieties' ? 'seedBrands' : (key === 'chemicalCategories' ? 'jobTypes' : null)));
+                    const parentRef = key === 'farms' ? 'growerId' : (key === 'seedBrands' ? 'cropId' : (key === 'seedVarieties' ? 'brandId' : (key === 'chemicalCategories' ? 'jobTypeId' : null)));
+                    const extraCheck = parentKey ? (i => i.id !== id && i[parentRef] === item[parentRef]) : (i => i.id !== id);
+
+                    if(isDuplicate(set[key], trimmed, extraCheck)) return alert(`"${trimmed}" already exists.`);
+                    item.name = trimmed;
+                }
             }
             saveDB(db); render();
         }
