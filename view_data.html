@@ -9,6 +9,7 @@
         .summary-block { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 10px; }
         .summary-block div { background: var(--card-bg); border-left: 4px solid var(--primary); padding: 10px 12px; border-radius: 4px; border: 1px solid var(--border); border-left-width: 4px; }
         .edit-subcard { background: var(--bg-color); border: 1px dashed var(--border); padding: 10px; border-radius: 4px; margin-bottom: 8px; }
+        .category-section-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -61,10 +62,9 @@
 
                 <!-- Dynamic Full Application Edit Section -->
                 <div id="applicationEditFields" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
-                    <div class="form-group"><label>Job Type</label><select id="edit_jobType"></select></div>
-                    <h4 style="color:var(--primary); margin:10px 0;">Chemicals & Application Rates</h4>
-                    <div id="edit_chemsContainer"></div>
-                    <button type="button" class="btn btn-small" onclick="addEditChemRow()">+ Add Chemical Product</button>
+                    <div class="form-group"><label>Job Type</label><select id="edit_jobType" required></select></div>
+                    <h4 style="color:var(--primary); margin:10px 0;">Categories & Chemicals</h4>
+                    <div id="edit_categorySectionsContainer"></div>
                 </div>
                 
                 <!-- Dynamic Full Harvest Edit Section -->
@@ -177,16 +177,29 @@
                     if(d.apps.length > 0) {
                         d.apps.forEach(a => {
                             const jt = set.jobTypes.find(x=>x.id===a.jobTypeId);
-                            det += `<div style="border-bottom:1px solid var(--border); padding:4px 0; border-left:none; border-top:none; border-right:none; border-radius:0;">
+                            det += `<div style="border-bottom:1px solid var(--border); padding:6px 0;">
                                     <strong>${a.date} - ${jt?jt.name:''} (${a.treatedAcres} ac)</strong> 
                                     <button class="edit-btn" onclick="openPopupEditor('applications','${a.id}')">✎</button> 
                                     <button class="delete-btn" onclick="delRecord('applications','${a.id}')">×</button><br>`;
+                            
+                            // Group chemicals by category for the overview display
+                            const catMap = {};
                             a.chemicals?.forEach(ch => {
-                                const chem = set.chemicals.find(x=>x.id===ch.chemicalId);
-                                const u = set.units.find(x=>x.id===ch.unitId);
-                                det += ` <small>&rsaquo; ${chem?chem.name:''}: ${ch.rate} ${u?u.name:''}</small><br>`;
+                                if(!catMap[ch.categoryId]) catMap[ch.categoryId] = [];
+                                catMap[ch.categoryId].push(ch);
                             });
-                            if(a.notes) det += `<small style="color:var(--text-muted); display:block;">Notes: ${a.notes}</small>`;
+
+                            Object.keys(catMap).forEach(catId => {
+                                const cat = set.chemicalCategories.find(c => c.id === catId);
+                                det += `<div style="margin-top:4px; font-weight:600; color:var(--primary);">&bull; ${cat ? cat.name : 'Uncategorized'}:</div>`;
+                                catMap[catId].forEach(ch => {
+                                    const chem = set.chemicals.find(x=>x.id===ch.chemicalId);
+                                    const u = set.units.find(x=>x.id===ch.unitId);
+                                    det += ` &nbsp;&nbsp;&rsaquo; ${chem?chem.name:''}: ${ch.rate} ${u?u.name:''}<br>`;
+                                });
+                            });
+
+                            if(a.notes) det += `<small style="color:var(--text-muted); display:block; margin-top:2px;">Notes: ${a.notes}</small>`;
                             det += `</div>`;
                         });
                     } else { det += 'No treatment applications made.'; }
@@ -282,31 +295,73 @@
             }
         }
 
-        function addEditChemRow(data = null) {
-            const container = document.getElementById('edit_chemsContainer');
+        function renderEditAppCategories(jobTypeId, existingChems = []) {
+            const container = document.getElementById('edit_categorySectionsContainer');
+            container.innerHTML = '';
+            const validCats = set.chemicalCategories.filter(c => c.jobTypeId === jobTypeId);
+            if(validCats.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted); font-style:italic;">No categories found for this Job Type.</p>';
+                return;
+            }
+
+            validCats.forEach(cat => {
+                const box = document.createElement('div');
+                box.className = 'category-section-box';
+                box.dataset.categoryId = cat.id;
+                box.innerHTML = `
+                    <h4 style="color:var(--primary); margin-bottom:8px;">${cat.name}</h4>
+                    <div class="chem-rows-container"></div>
+                    <button type="button" class="btn btn-small btn-primary" style="margin-top:5px;" onclick="addEditCatChemRow('${cat.id}')">+ Add ${cat.name}</button>
+                `;
+                container.appendChild(box);
+
+                const matchedChems = existingChems.filter(ch => ch.categoryId === cat.id);
+                matchedChems.forEach(ch => addEditCatChemRow(cat.id, ch));
+            });
+        }
+
+        function addEditCatChemRow(categoryId, data = null) {
+            const box = document.querySelector(`.category-section-box[data-category-id="${categoryId}"]`);
+            if(!box) return;
+            const rowsContainer = box.querySelector('.chem-rows-container');
+
             const div = document.createElement('div');
-            div.className = 'edit-subcard edit-c-row';
+            div.className = 'card product-entry';
+            div.style = "margin-bottom:8px; border: 1px dashed var(--border); padding:10px;";
             div.innerHTML = `
                 <div class="grid-3">
-                    <div class="form-group"><label>Chemical</label><select class="ec-chem" required></select></div>
-                    <div class="form-group"><label>Rate / Ac</label><input type="number" class="ec-rate" step="0.01" required></div>
-                    <div class="form-group"><label>Unit</label><select class="ec-unit" required></select></div>
+                    <div class="form-group"><label>Product</label><select class="p-chem" required></select></div>
+                    <div class="form-group"><label>Rate / Acre</label><input type="number" class="p-rate" step="0.01" required></div>
+                    <div class="form-group"><label>Unit</label><select class="p-unit" required></select></div>
                 </div>
                 <button type="button" class="btn btn-danger btn-small" onclick="this.parentElement.remove()">Remove</button>
             `;
-            container.appendChild(div);
-            const cSel = div.querySelector('.ec-chem'); const uSel = div.querySelector('.ec-unit');
-            populateSelect(cSel, set.chemicals); populateSelect(uSel, set.units);
-            cSel.addEventListener('change', () => {
-                const ch = set.chemicals.find(c => c.id === cSel.value);
-                if(ch) { div.querySelector('.ec-rate').value = ch.defaultAmount; uSel.value = ch.defaultUnitId; }
+            rowsContainer.appendChild(div);
+
+            const pSel = div.querySelector('.p-chem'); 
+            const uSel = div.querySelector('.p-unit');
+            const catChems = set.chemicals.filter(c => c.categoryId === categoryId);
+            populateSelect(pSel, catChems, "Select Product...");
+            populateSelect(uSel, set.units, "Unit...");
+
+            pSel.addEventListener('change', () => {
+                const chem = set.chemicals.find(c => c.id === pSel.value);
+                if(chem) { 
+                    div.querySelector('.p-rate').value = chem.defaultAmount; 
+                    uSel.value = chem.defaultUnitId; 
+                }
             });
+
             if(data) {
-                cSel.value = data.chemicalId;
-                div.querySelector('.ec-rate').value = data.rate;
+                pSel.value = data.chemicalId; 
+                div.querySelector('.p-rate').value = data.rate; 
                 uSel.value = data.unitId;
             }
         }
+
+        document.getElementById('edit_jobType').addEventListener('change', (e) => {
+            renderEditAppCategories(e.target.value, []);
+        });
 
         function openPopupEditor(arr, id) {
             const db = getDB(); const item = db[arr].find(x => x.id === id);
@@ -342,9 +397,7 @@
                 document.getElementById('edit_acres').value = item.treatedAcres;
                 populateSelect('edit_jobType', set.jobTypes);
                 document.getElementById('edit_jobType').value = item.jobTypeId;
-
-                document.getElementById('edit_chemsContainer').innerHTML = '';
-                item.chemicals?.forEach(c => addEditChemRow(c));
+                renderEditAppCategories(item.jobTypeId, item.chemicals);
 
             } else if(arr === 'harvests') {
                 document.getElementById('editModalTitle').textContent = "Edit Harvest Summary";
@@ -422,14 +475,15 @@
                 item.treatedAcres = parseFloat(document.getElementById('edit_acres').value);
                 item.jobTypeId = document.getElementById('edit_jobType').value;
                 const chems = [];
-                document.querySelectorAll('.edit-c-row').forEach(row => {
-                    const chemId = row.querySelector('.ec-chem').value;
-                    const chemObj = set.chemicals.find(c => c.id === chemId);
-                    chems.push({
-                        categoryId: chemObj ? chemObj.categoryId : '',
-                        chemicalId: chemId,
-                        rate: parseFloat(row.querySelector('.ec-rate').value || 0),
-                        unitId: row.querySelector('.ec-unit').value
+                document.querySelectorAll('.category-section-box').forEach(box => {
+                    const catId = box.dataset.categoryId;
+                    box.querySelectorAll('.product-entry').forEach(row => {
+                        chems.push({
+                            categoryId: catId,
+                            chemicalId: row.querySelector('.p-chem').value,
+                            rate: parseFloat(row.querySelector('.p-rate').value || 0),
+                            unitId: row.querySelector('.p-unit').value
+                        });
                     });
                 });
                 item.chemicals = chems;
