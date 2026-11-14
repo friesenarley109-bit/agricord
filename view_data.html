@@ -62,7 +62,7 @@
 
                 <!-- Dynamic Full Application Edit Section -->
                 <div id="applicationEditFields" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
-                    <div class="form-group"><label>Job Type</label><select id="edit_jobType" required></select></div>
+                    <div class="form-group"><label>Job Type</label><select id="edit_jobType"></select></div>
                     <h4 style="color:var(--primary); margin:10px 0;">Categories & Chemicals</h4>
                     <div id="edit_categorySectionsContainer"></div>
                 </div>
@@ -374,6 +374,17 @@
             document.getElementById('applicationEditFields').style.display = (arr === 'applications') ? 'block' : 'none';
             document.getElementById('harvestEditFields').style.display = (arr === 'harvests') ? 'block' : 'none';
             document.getElementById('acresInputBox').style.display = (arr === 'harvests') ? 'none' : 'block';
+
+            // Clear hidden dynamic containers so stale required fields don't block submission
+            document.getElementById('edit_varietiesContainer').innerHTML = '';
+            document.getElementById('edit_infurrowContainer').innerHTML = '';
+            document.getElementById('edit_uanContainer').innerHTML = '';
+            document.getElementById('edit_categorySectionsContainer').innerHTML = '';
+
+            // Toggle required attributes based on active section
+            document.getElementById('edit_acres').required = (arr !== 'harvests');
+            document.getElementById('edit_crop').required = (arr === 'plantings');
+            document.getElementById('edit_jobType').required = (arr === 'applications');
             
             if(arr === 'plantings') {
                 document.getElementById('editModalTitle').textContent = "Edit Complete Planting Record";
@@ -383,13 +394,8 @@
                 document.getElementById('edit_targetInfurrow').value = item.targetInfurrowGal || 0;
                 document.getElementById('edit_targetUan').value = item.targetUanGal || 0;
 
-                document.getElementById('edit_varietiesContainer').innerHTML = '';
                 item.varieties?.forEach(v => addEditVarietyRow(v));
-
-                document.getElementById('edit_infurrowContainer').innerHTML = '';
                 item.infurrowFertilizers?.forEach(f => addEditFertRow('edit_infurrowContainer', f));
-
-                document.getElementById('edit_uanContainer').innerHTML = '';
                 item.uanFertilizers?.forEach(f => addEditFertRow('edit_uanContainer', f));
 
             } else if(arr === 'applications') {
